@@ -16,7 +16,7 @@ It helps users manage their medicine schedules, set reminders, and track expiry 
 
 ## 🛠️ Tech Stack
 - **Language:** Java 17  
-- **UI:** Swing + JCalendar  
+- **UI:** Swing + AWT  
 - **Database:** MySQL  
 - **Build Tool:** Maven  
 - **Dependencies:**  
@@ -29,5 +29,5 @@ It helps users manage their medicine schedules, set reminders, and track expiry 
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/MedicineDABBA.git
+git clone https://github.com/SamayM02/Mini_Project.git
 cd MedicineDABBA
