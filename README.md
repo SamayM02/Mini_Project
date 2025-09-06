@@ -16,7 +16,7 @@ It helps users manage their medicine schedules, set reminders, and track expiry 
 
 ## 🛠️ Tech Stack
 - **Language:** Java 17  
-- **UI:** Swing + AbsoluteLayout + JCalendar  
+- **UI:** Swing + JCalendar  
 - **Database:** MySQL  
 - **Build Tool:** Maven  
 - **Dependencies:**  
