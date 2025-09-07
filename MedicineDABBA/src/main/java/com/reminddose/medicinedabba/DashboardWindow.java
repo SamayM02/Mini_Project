@@ -81,7 +81,7 @@ public class DashboardWindow extends JFrame {
         loadDashboardData();
 
         // in constructor or after login:
-        reminderScheduler = new ReminderScheduler();
+        reminderScheduler = new ReminderScheduler(this);
         reminderScheduler.start();
 
         // Finalize

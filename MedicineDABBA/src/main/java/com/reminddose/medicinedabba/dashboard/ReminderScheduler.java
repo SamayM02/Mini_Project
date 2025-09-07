@@ -8,7 +8,6 @@ package com.reminddose.medicinedabba.dashboard;
  *
  * @author lenovo
  */
-
 import com.reminddose.medicinedabba.database.DBConnection;
 import com.reminddose.medicinedabba.database.Session;
 
@@ -21,11 +20,17 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ReminderScheduler {
+
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "ReminderScheduler");
         t.setDaemon(true);
         return t;
     });
+    private final JFrame parentFrame;
+
+    public ReminderScheduler(JFrame parentFrame) {
+        this.parentFrame = parentFrame;
+    }
 
     // avoid showing same minute multiple times
     private volatile int lastProcessedMinute = -1;
@@ -54,19 +59,18 @@ public class ReminderScheduler {
             LocalTime timeToMatch = now.truncatedTo(ChronoUnit.MINUTES).toLocalTime(); // hh:mm
 
             // build SQL: find reminders valid today whose reminder_time == current minute and weekday matches (if present)
-            String sql =
-                    "SELECT r.id AS reminder_id, r.repeat_type, r.start_date, r.end_date, r.user_id, r.medicine_id, r.dosage, r.notes, " +
-                    "rt.time AS rtime, rt.weekday AS weekday, m.name AS medicine_name " +
-                    "FROM reminders r " +
-                    "JOIN reminder_times rt ON rt.reminder_id = r.id " +
-                    "JOIN medicines m ON m.id = r.medicine_id " +
-                    "WHERE r.user_id = ? " +
-                    "AND r.start_date <= ? " +
-                    "AND (r.end_date IS NULL OR r.end_date >= ?) " +
-                    "AND rt.time = ?"; // time exact match to minute
+            String sql
+                    = "SELECT r.id AS reminder_id, r.repeat_type, r.start_date, r.end_date, r.user_id, r.medicine_id, r.dosage, r.notes, "
+                    + "rt.time AS rtime, rt.weekday AS weekday, m.name AS medicine_name "
+                    + "FROM reminders r "
+                    + "JOIN reminder_times rt ON rt.reminder_id = r.id "
+                    + "JOIN medicines m ON m.id = r.medicine_id "
+                    + "WHERE r.user_id = ? "
+                    + "AND r.start_date <= ? "
+                    + "AND (r.end_date IS NULL OR r.end_date >= ?) "
+                    + "AND rt.time = ?"; // time exact match to minute
 
-            try (Connection conn = DBConnection.getConnection();
-                 PreparedStatement ps = conn.prepareStatement(sql)) {
+            try (Connection conn = DBConnection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
 
                 ps.setLong(1, Session.getCurrentUserId());
                 ps.setDate(2, java.sql.Date.valueOf(today));
@@ -103,7 +107,9 @@ public class ReminderScheduler {
                         shouldFire = true;
                     }
 
-                    if (!shouldFire) continue;
+                    if (!shouldFire) {
+                        continue;
+                    }
 
                     // Avoid duplicates across restarts by writing/reading reminder_history
                     if (wasAlreadyShown(conn, reminderId, rtime.toLocalTime(), today)) {
@@ -117,11 +123,22 @@ public class ReminderScheduler {
                     final String title = "Reminder: " + medicineName;
                     final String details = "Take: " + dosage + " at " + rtime.toLocalTime().truncatedTo(ChronoUnit.MINUTES);
 
+                    // In ReminderScheduler.java -> pollAndShow() method:
                     SwingUtilities.invokeLater(() -> {
                         try {
-                            // If your project has a ReminderDialog class, use it; otherwise use small popup below
+                            // Create and apply the blur effect to the parent frame.
+                            BlurGlassPane glassPane = new BlurGlassPane(parentFrame);
+                            parentFrame.setGlassPane(glassPane);
+                            glassPane.setVisible(true);
+
+                            // Create the ReminderPopup, passing the parent frame to it if needed
+                            // ReminderPopup already has a constructor for this, you don't need to change its constructor
                             ReminderPopup popup = new ReminderPopup(title, medicineName, dosage, rtime.toLocalTime());
                             popup.setVisible(true);
+
+                            // Once the popup is closed, remove the blur effect.
+                            glassPane.setVisible(false);
+
                         } catch (Exception ex) {
                             logger.log(Level.SEVERE, "Failed to show reminder UI", ex);
                         }

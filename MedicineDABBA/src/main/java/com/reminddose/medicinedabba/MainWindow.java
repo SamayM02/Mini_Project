@@ -13,26 +13,6 @@ import com.reminddose.medicinedabba.database.*;
 public class MainWindow {
     public static void main(String ag[]){
             RemindDoseGUI won = new RemindDoseGUI();
-            won.setVisible(true); 
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-//              login ln = new login();
-//              ln.setVisible(true);
-
-//            ProfileFormWindow pf = new ProfileFormWindow();
-//            pf.setVisible(true);
-
-//              DashboardWindow db = new DashboardWindow();
-//              db.setVisible(true);
-            
-            
+            won.setVisible(true);
     }
 }
