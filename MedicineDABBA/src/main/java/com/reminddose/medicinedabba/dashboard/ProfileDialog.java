@@ -4,15 +4,21 @@
  */
 package com.reminddose.medicinedabba.dashboard;
 
+import com.reminddose.medicinedabba.database.DBConnection;
+import com.reminddose.medicinedabba.database.Session;
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.basic.BasicComboBoxUI;
+import javax.swing.plaf.basic.BasicTextAreaUI;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-
-import com.reminddose.medicinedabba.database.DBConnection;
-import com.reminddose.medicinedabba.database.Session;  // ✅ Use Session for logged-in user
+import java.sql.Types;
 
 public class ProfileDialog extends JDialog {
     private JTextField fullNameField;
@@ -32,13 +38,15 @@ public class ProfileDialog extends JDialog {
     }
 
     private void initializeUI() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        panel.setBackground(new Color(243,243,191));  
+        JPanel panel = new RoundedPanel(15, new Color(243, 243, 191));
+        panel.setLayout(new GridBagLayout());
+        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+        
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
-
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.weightx = 1.0;
+        
         // Label styling
         Font labelFont = new Font("Segoe UI", Font.BOLD, 13);
         Color labelColor = new Color(0, 51, 102);
@@ -50,7 +58,7 @@ public class ProfileDialog extends JDialog {
         nameLabel.setForeground(labelColor);
         panel.add(nameLabel, gbc);
         gbc.gridx = 1;
-        fullNameField = new JTextField(20);
+        fullNameField = new RoundedTextField(20);
         fullNameField.setEnabled(false);
         panel.add(fullNameField, gbc);
 
@@ -61,7 +69,7 @@ public class ProfileDialog extends JDialog {
         phoneLabel.setForeground(labelColor);
         panel.add(phoneLabel, gbc);
         gbc.gridx = 1;
-        phoneField = new JTextField(20);
+        phoneField = new RoundedTextField(20);
         panel.add(phoneField, gbc);
 
         // Age
@@ -71,7 +79,7 @@ public class ProfileDialog extends JDialog {
         ageLabel.setForeground(labelColor);
         panel.add(ageLabel, gbc);
         gbc.gridx = 1;
-        ageField = new JTextField(20);
+        ageField = new RoundedTextField(20);
         panel.add(ageField, gbc);
 
         // Height
@@ -81,7 +89,7 @@ public class ProfileDialog extends JDialog {
         heightLabel.setForeground(labelColor);
         panel.add(heightLabel, gbc);
         gbc.gridx = 1;
-        heightField = new JTextField(20);
+        heightField = new RoundedTextField(20);
         panel.add(heightField, gbc);
 
         // Gender (disabled)
@@ -93,6 +101,7 @@ public class ProfileDialog extends JDialog {
         gbc.gridx = 1;
         genderComboBox = new JComboBox<>(new String[]{"Male", "Female", "Other", "Prefer not to say"});
         genderComboBox.setEnabled(false);
+        styleComboBox(genderComboBox);
         panel.add(genderComboBox, gbc);
 
         // Weight
@@ -102,7 +111,7 @@ public class ProfileDialog extends JDialog {
         weightLabel.setForeground(labelColor);
         panel.add(weightLabel, gbc);
         gbc.gridx = 1;
-        weightField = new JTextField(20);
+        weightField = new RoundedTextField(20);
         panel.add(weightField, gbc);
 
         // Medical Issues
@@ -114,29 +123,25 @@ public class ProfileDialog extends JDialog {
         gbc.gridx = 1;
         medicalIssuesArea = new JTextArea(3, 20);
         medicalIssuesArea.setLineWrap(true);
+        styleTextArea(medicalIssuesArea);
         JScrollPane scrollPane = new JScrollPane(medicalIssuesArea);
-        scrollPane.setBackground(Color.WHITE);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
         panel.add(scrollPane, gbc);
 
         // Buttons
         gbc.gridx = 0; gbc.gridy = 7;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        buttonPanel.setBackground(new Color(243,243,191)); // Match background
+        JPanel buttonPanel = new RoundedPanel(15, new Color(243, 243, 191));
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
 
-        JButton saveButton = new JButton("Save Changes");
-        saveButton.setBackground(new Color(81,189,101));
-        saveButton.setForeground(Color.WHITE);
-        saveButton.setFocusPainted(false);
-
-        JButton cancelButton = new JButton("Cancel");
-        cancelButton.setBackground(new Color(200, 80, 80));
-        cancelButton.setForeground(Color.WHITE);
-        cancelButton.setFocusPainted(false);
-
+        JButton saveButton = new FilledRoundedButton("Save Changes", new Color(81, 189, 101));
         saveButton.addActionListener(e -> saveProfile());
+        saveButton.setPreferredSize(new Dimension(120, 30));
+
+        JButton cancelButton = new FilledRoundedButton("Cancel", new Color(200, 80, 80));
         cancelButton.addActionListener(e -> dispose());
+        cancelButton.setPreferredSize(new Dimension(90, 30));
 
         buttonPanel.add(saveButton);
         buttonPanel.add(cancelButton);
@@ -145,7 +150,6 @@ public class ProfileDialog extends JDialog {
         add(panel);
     }
 
-    // ----------------- Load Profile Data -----------------
     private void loadProfileData() {
         try (Connection conn = DBConnection.getConnection()) {
             String query = "SELECT * FROM profiles WHERE user_id = ?";
@@ -185,7 +189,6 @@ public class ProfileDialog extends JDialog {
         }
     }
 
-    // ----------------- Save Profile -----------------
     private void saveProfile() {
         String phone = phoneField.getText().trim();
         String ageText = ageField.getText().trim();
@@ -265,6 +268,144 @@ public class ProfileDialog extends JDialog {
     }
 
     private long getCurrentUserId() {
-        return Session.getCurrentUserId();   // ✅ Now it uses Session
+        return Session.getCurrentUserId();
+    }
+    
+    private void styleComboBox(JComboBox<String> combo) {
+        combo.setOpaque(false);
+        combo.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
+        combo.setUI(new BasicComboBoxUI());
+    }
+    
+    private void styleTextArea(JTextArea textArea) {
+        textArea.setOpaque(false);
+        textArea.setUI(new BasicTextAreaUI() {
+            @Override
+            protected void paintBackground(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
+                g2.dispose();
+            }
+        });
+        textArea.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color.GRAY, 1, true),
+            new EmptyBorder(5, 8, 5, 8)
+        ));
+    }
+
+    /**
+     * A custom JPanel with a rounded background.
+     */
+    private static class RoundedPanel extends JPanel {
+        private int cornerRadius;
+        private Color backgroundColor;
+
+        public RoundedPanel(int radius, Color bgColor) {
+            super();
+            this.cornerRadius = radius;
+            this.backgroundColor = bgColor;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setColor(backgroundColor);
+            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            g2d.dispose();
+        }
+    }
+    
+    /**
+     * A custom JTextField with a rounded border and padding.
+     */
+    private static class RoundedTextField extends JTextField {
+        private int cornerRadius;
+
+        public RoundedTextField(int columns) {
+            super(columns);
+            this.cornerRadius = 15;
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Padding inside the text field
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(Color.WHITE);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            super.paintComponent(g);
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(200, 200, 200));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, cornerRadius, cornerRadius);
+            g2.dispose();
+        }
+    }
+    
+    /**
+     * A custom JButton with a filled, rounded background and hover effect.
+     */
+    private static class FilledRoundedButton extends JButton {
+        private final Color baseColor;
+        private static final int CORNER_RADIUS = 15;
+
+        public FilledRoundedButton(String text, Color baseColor) {
+            super(text);
+            this.baseColor = baseColor;
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setForeground(Color.WHITE);
+            setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+            setFont(new Font("Arial", Font.BOLD, 12));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            // Add hover effect
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    setBackground(baseColor.brighter());
+                    repaint(); // repaint to show brighter color
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setBackground(baseColor);
+                    repaint(); // repaint to show base color
+                }
+            });
+        }
+        
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Set background color based on hover state
+            if (getModel().isRollover()) {
+                g2.setColor(baseColor.brighter());
+            } else {
+                g2.setColor(baseColor);
+            }
+
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            // No border painting
+        }
     }
 }

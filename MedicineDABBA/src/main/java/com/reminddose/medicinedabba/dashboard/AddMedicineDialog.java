@@ -5,28 +5,30 @@
 package com.reminddose.medicinedabba.dashboard;
 
 import com.reminddose.medicinedabba.database.DBConnection;
-import com.reminddose.medicinedabba.database.Session;  // ✅ Import Session
+import com.reminddose.medicinedabba.database.Session;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.basic.BasicComboBoxUI;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.LocalDate;
+import java.awt.geom.RoundRectangle2D;
 
-import com.toedter.calendar.JDateChooser;   // ✅ Calendar date chooser
+import com.toedter.calendar.JDateChooser;
 
 /**
- *
- * @author lenovo
+ * A dialog to add a new medicine with a modern, rounded appearance.
  */
 public class AddMedicineDialog extends JDialog {
     private JTextField nameField;
     private JComboBox<String> categoryCombo;
-    private JTextField dosageField;
     private JSpinner quantitySpinner;
     private JDateChooser mfgDateChooser;
     private JDateChooser expiryDateChooser;
@@ -39,19 +41,20 @@ public class AddMedicineDialog extends JDialog {
     }
 
     private void initializeUI() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(new Color(243,243,191)); // ✅ Background color
+        JPanel panel = new RoundedPanel(15, new Color(243, 243, 191));
+        panel.setLayout(new GridBagLayout());
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.weightx = 1.0;
 
         // Medicine Name
         gbc.gridx = 0; gbc.gridy = 0;
         panel.add(new JLabel("Medicine Name *:"), gbc);
         gbc.gridx = 1;
-        nameField = createRoundedTextField();
+        nameField = new RoundedTextField(20);
         panel.add(nameField, gbc);
 
         // Category
@@ -63,56 +66,45 @@ public class AddMedicineDialog extends JDialog {
         styleComboBox(categoryCombo);
         panel.add(categoryCombo, gbc);
 
-        // Dosage
-        gbc.gridx = 0; gbc.gridy = 2;
-        panel.add(new JLabel("Dosage:"), gbc);
-        gbc.gridx = 1;
-        dosageField = createRoundedTextField();
-        panel.add(dosageField, gbc);
-
         // Quantity
-        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.gridx = 0; gbc.gridy = 2;
         panel.add(new JLabel("Quantity *:"), gbc);
         gbc.gridx = 1;
         quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1000, 1));
         panel.add(quantitySpinner, gbc);
 
         // Manufacture Date
-        gbc.gridx = 0; gbc.gridy = 4;
+        gbc.gridx = 0; gbc.gridy = 3;
         panel.add(new JLabel("Manufacture Date *:"), gbc);
         gbc.gridx = 1;
         mfgDateChooser = new JDateChooser();
-        mfgDateChooser.setDateFormatString("yyyy-MM-dd"); // ✅ display format
+        mfgDateChooser.setDateFormatString("yyyy-MM-dd");
+        mfgDateChooser.setBorder(BorderFactory.createEmptyBorder()); // remove border
         panel.add(mfgDateChooser, gbc);
 
         // Expiry Date
-        gbc.gridx = 0; gbc.gridy = 5;
+        gbc.gridx = 0; gbc.gridy = 4;
         panel.add(new JLabel("Expiry Date *:"), gbc);
         gbc.gridx = 1;
         expiryDateChooser = new JDateChooser();
         expiryDateChooser.setDateFormatString("yyyy-MM-dd");
+        expiryDateChooser.setBorder(BorderFactory.createEmptyBorder()); // remove border
         panel.add(expiryDateChooser, gbc);
 
         // Buttons
-        gbc.gridx = 0; gbc.gridy = 6;
+        gbc.gridx = 0; gbc.gridy = 5;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
-        buttonPanel.setBackground(new Color(243,243,191)); // match bg
+        JPanel buttonPanel = new RoundedPanel(15, new Color(243, 243, 191));
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
 
-        JButton saveButton = new JButton("Save");
-        saveButton.setBackground(new Color(81,189,101)); // ✅ button color
-        saveButton.setForeground(Color.WHITE);
-        saveButton.setFocusPainted(false);
-        saveButton.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        JButton saveButton = new FilledRoundedButton("Save", new Color(81,189,101));
         saveButton.addActionListener(this::saveMedicine);
+        saveButton.setPreferredSize(new Dimension(80, 30));
 
-        JButton cancelButton = new JButton("Cancel");
-        cancelButton.setBackground(new Color(200, 80, 80));
-        cancelButton.setForeground(Color.WHITE);
-        cancelButton.setFocusPainted(false);
-        cancelButton.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        JButton cancelButton = new FilledRoundedButton("Cancel", new Color(200, 80, 80));
         cancelButton.addActionListener(e -> dispose());
+        cancelButton.setPreferredSize(new Dimension(80, 30));
 
         buttonPanel.add(saveButton);
         buttonPanel.add(cancelButton);
@@ -121,25 +113,31 @@ public class AddMedicineDialog extends JDialog {
         add(panel);
     }
 
-    private JTextField createRoundedTextField() {
-        JTextField field = new JTextField(20);
-        field.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.GRAY, 1, true),
-                BorderFactory.createEmptyBorder(5, 8, 5, 8)
-        ));
-        return field;
-    }
-
     private void styleComboBox(JComboBox<String> combo) {
+        combo.setOpaque(false);
         combo.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
         combo.setUI(new BasicComboBoxUI());
     }
 
     private void saveMedicine(ActionEvent e) {
-        if (nameField.getText().trim().isEmpty()) {
+        String medicineName = nameField.getText().trim();
+        
+        if (medicineName.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter medicine name", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        // --- EDITED CONSTRAINT VALIDATION ---
+        // Check if the medicine name starts with a letter (A-Z or a-z). 
+        // This is more restrictive than just checking for digits.
+        if (!Character.isLetter(medicineName.charAt(0))) {
+            JOptionPane.showMessageDialog(this, 
+                    "Medicine name must start with a letter (A-Z).", 
+                    "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // --- END EDITED CONSTRAINT VALIDATION ---
+
 
         java.util.Date mfgDateUtil = mfgDateChooser.getDate();
         java.util.Date expDateUtil = expiryDateChooser.getDate();
@@ -163,11 +161,11 @@ public class AddMedicineDialog extends JDialog {
 
             PreparedStatement stmt = conn.prepareStatement(query);
             stmt.setLong(1, Session.getCurrentUserId());
-            stmt.setString(2, nameField.getText().trim());
+            stmt.setString(2, medicineName);
             stmt.setString(3, ((String) categoryCombo.getSelectedItem()).toLowerCase());
             stmt.setDate(4, java.sql.Date.valueOf(mfgDate));
             stmt.setDate(5, java.sql.Date.valueOf(expDate));
-            stmt.setString(6, dosageField.getText().trim());
+            stmt.setNull(6, Types.VARCHAR); // Set dosage to null
             stmt.setInt(7, (Integer) quantitySpinner.getValue());
 
             int rows = stmt.executeUpdate();
@@ -182,6 +180,120 @@ public class AddMedicineDialog extends JDialog {
             JOptionPane.showMessageDialog(this, "Error saving medicine: " + ex.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
+        }
+    }
+    
+    /**
+     * A custom JTextField with a rounded border.
+     */
+    private static class RoundedTextField extends JTextField {
+        private int cornerRadius;
+
+        public RoundedTextField(int radius) {
+            super();
+            this.cornerRadius = radius;
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(getBackground());
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            super.paintComponent(g);
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(200, 200, 200));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, cornerRadius, cornerRadius);
+            g2.dispose();
+        }
+    }
+
+    /**
+     * A custom JPanel with a rounded background.
+     */
+    private static class RoundedPanel extends JPanel {
+        private int cornerRadius;
+        private Color backgroundColor;
+
+        public RoundedPanel(int radius, Color bgColor) {
+            super();
+            this.cornerRadius = radius;
+            this.backgroundColor = bgColor;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setColor(backgroundColor);
+            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            g2d.dispose();
+        }
+    }
+    
+    /**
+     * A custom JButton with a filled, rounded background and hover effect.
+     */
+    private static class FilledRoundedButton extends JButton {
+        private final Color baseColor;
+        private static final int CORNER_RADIUS = 15;
+
+        public FilledRoundedButton(String text, Color baseColor) {
+            super(text);
+            this.baseColor = baseColor;
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setForeground(Color.WHITE);
+            setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+            setFont(new Font("Arial", Font.BOLD, 12));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            // Add hover effect
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    setBackground(baseColor.brighter());
+                    repaint(); // repaint to show brighter color
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setBackground(baseColor);
+                    repaint(); // repaint to show base color
+                }
+            });
+        }
+        
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Set background color based on hover state
+            if (getModel().isRollover()) {
+                g2.setColor(baseColor.brighter());
+            } else {
+                g2.setColor(baseColor);
+            }
+
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            // No border painting
         }
     }
 }

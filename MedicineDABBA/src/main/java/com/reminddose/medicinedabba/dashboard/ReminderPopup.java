@@ -36,7 +36,7 @@ public class ReminderPopup extends JDialog {
 
         // setUndecorated(true); // Commented out to allow classic JDialog border
         setModal(true);
-        setSize(400, 280);
+        setSize(700, 400);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
@@ -50,7 +50,7 @@ public class ReminderPopup extends JDialog {
         gbc.anchor = GridBagConstraints.CENTER;
 
         // Title Label
-        JLabel titleLabel = new JLabel("TIME TO TAKE YOUR MEDICINE!");
+        JLabel titleLabel = new JLabel(Session.getUsername() + " " + "TIME TO TAKE YOUR MEDICINE");
         titleLabel.setFont(new Font("Arial", Font.BOLD, 20));
         titleLabel.setForeground(new Color(51, 51, 51));
         gbc.gridy = 0;
@@ -122,7 +122,8 @@ public class ReminderPopup extends JDialog {
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowOpened(java.awt.event.WindowEvent e) {
-                playAudio("OG_Alarm.wav");
+                  playAudio("a.wav");
+//                playAudio("OG_Alarm.wav");
             }
 
             @Override

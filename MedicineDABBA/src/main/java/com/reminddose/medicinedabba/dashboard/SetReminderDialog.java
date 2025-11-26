@@ -4,20 +4,19 @@
  */
 package com.reminddose.medicinedabba.dashboard;
 
-/**
- *
- * @author lenovo
- */
-
-
 import com.reminddose.medicinedabba.database.DBConnection;
 import com.reminddose.medicinedabba.database.Session;
 import com.toedter.calendar.JDateChooser;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.basic.BasicComboBoxUI;
+import javax.swing.plaf.basic.BasicSpinnerUI;
+import javax.swing.plaf.basic.BasicTextFieldUI;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -26,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.awt.geom.RoundRectangle2D;
 
 public class SetReminderDialog extends JDialog {
     private JComboBox<String> medicineCombo;
@@ -49,12 +49,13 @@ public class SetReminderDialog extends JDialog {
     }
 
     private void initializeUI() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(new Color(243,243,191));
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        JPanel panel = new RoundedPanel(15, new Color(243, 243, 191));
+        panel.setLayout(new GridBagLayout());
+        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.weightx = 1.0;
 
         // Medicine Selection
         gbc.gridx = 0; gbc.gridy = 0;
@@ -62,28 +63,24 @@ public class SetReminderDialog extends JDialog {
         gbc.gridx = 1;
         medicineCombo = new JComboBox<>();
         medicineCombo.addActionListener(e -> updateDosageField());
-        medicineCombo.setBorder(BorderFactory.createLineBorder(Color.GRAY,1,true));
+        styleComboBox(medicineCombo);
         panel.add(medicineCombo, gbc);
 
         // Dosage
         gbc.gridx = 0; gbc.gridy = 1;
         panel.add(new JLabel("Dosage *:"), gbc);
         gbc.gridx = 1;
-        dosageField = new JTextField(20);
-        dosageField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.GRAY, 1, true),
-                BorderFactory.createEmptyBorder(5, 8, 5, 8)
-        ));
+        dosageField = new RoundedTextField(20);
         panel.add(dosageField, gbc);
 
         // Frequency
         gbc.gridx = 0; gbc.gridy = 2;
         panel.add(new JLabel("Frequency *:"), gbc);
         gbc.gridx = 1;
-        String[] frequencies = {"Daily", "Weekly", "Alternate Days", "Custom"};
+        String[] frequencies = {"Daily", "Weekly", "Alternate Days"};
         frequencyCombo = new JComboBox<>(frequencies);
         frequencyCombo.addActionListener(e -> toggleDaySelection());
-        frequencyCombo.setBorder(BorderFactory.createLineBorder(Color.GRAY,1,true));
+        styleComboBox(frequencyCombo);
         panel.add(frequencyCombo, gbc);
 
         // Days of week (hidden unless Weekly/Custom)
@@ -95,9 +92,19 @@ public class SetReminderDialog extends JDialog {
         String[] days = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
         dayCheckboxes = new JCheckBox[7];
         for (int i = 0; i < 7; i++) {
+            final int index = i;
             dayCheckboxes[i] = new JCheckBox(days[i]);
             dayCheckboxes[i].setOpaque(false);
             dayCheckboxes[i].setEnabled(false); // default disabled until weekly/custom
+            dayCheckboxes[i].addActionListener(e -> {
+                if (dayCheckboxes[index].isSelected()) {
+                    for (int j = 0; j < dayCheckboxes.length; j++) {
+                        if (j != index) {
+                            dayCheckboxes[j].setSelected(false);
+                        }
+                    }
+                }
+            });
             daysPanel.add(dayCheckboxes[i]);
         }
         panel.add(daysPanel, gbc);
@@ -108,6 +115,7 @@ public class SetReminderDialog extends JDialog {
         gbc.gridx = 1;
         startDateChooser = new JDateChooser();
         startDateChooser.setDateFormatString("yyyy-MM-dd");
+        styleDateChooser(startDateChooser);
         panel.add(startDateChooser, gbc);
 
         gbc.gridx = 0; gbc.gridy = 5;
@@ -115,6 +123,7 @@ public class SetReminderDialog extends JDialog {
         gbc.gridx = 1;
         endDateChooser = new JDateChooser();
         endDateChooser.setDateFormatString("yyyy-MM-dd");
+        styleDateChooser(endDateChooser);
         panel.add(endDateChooser, gbc);
 
         // Time spinner + AM/PM toggle
@@ -127,7 +136,7 @@ public class SetReminderDialog extends JDialog {
         // Spinner configured to show hour:minute in 12-hour mode for user's convenience
         SpinnerDateModel spinnerModel = new SpinnerDateModel(new Date(), null, null, Calendar.MINUTE);
         timeSpinner = new JSpinner(spinnerModel);
-        // Use a 12-hour editor (hh:mm)
+        styleSpinner(timeSpinner);
         JSpinner.DateEditor timeEditor = new JSpinner.DateEditor(timeSpinner, "hh:mm");
         timeSpinner.setEditor(timeEditor);
         timeSpinner.setPreferredSize(new Dimension(90, timeSpinner.getPreferredSize().height));
@@ -136,6 +145,7 @@ public class SetReminderDialog extends JDialog {
         // AM/PM combo (explicit toggle)
         amPmCombo = new JComboBox<>(new String[]{"AM","PM"});
         amPmCombo.setPreferredSize(new Dimension(65, amPmCombo.getPreferredSize().height));
+        styleComboBox(amPmCombo);
         timePanel.add(amPmCombo);
 
         panel.add(timePanel, gbc);
@@ -156,22 +166,16 @@ public class SetReminderDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = 8;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
-        buttonPanel.setBackground(new Color(243,243,191));
+        JPanel buttonPanel = new RoundedPanel(15, new Color(243, 243, 191));
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
 
-        JButton saveButton = new JButton("Save");
-        saveButton.setBackground(new Color(111, 189, 82));
-        saveButton.setForeground(Color.WHITE);
-        saveButton.setFocusPainted(false);
-        saveButton.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        JButton saveButton = new FilledRoundedButton("Save", new Color(81,189,101));
         saveButton.addActionListener(this::saveReminder);
+        saveButton.setPreferredSize(new Dimension(80, 30));
 
-        JButton cancelButton = new JButton("Cancel");
-        cancelButton.setBackground(new Color(81,189,101));
-        cancelButton.setForeground(Color.WHITE);
-        cancelButton.setFocusPainted(false);
-        cancelButton.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        JButton cancelButton = new FilledRoundedButton("Cancel", new Color(200, 80, 80));
         cancelButton.addActionListener(e -> dispose());
+        cancelButton.setPreferredSize(new Dimension(80, 30));
 
         buttonPanel.add(saveButton);
         buttonPanel.add(cancelButton);
@@ -183,7 +187,7 @@ public class SetReminderDialog extends JDialog {
 
     private void toggleDaySelection() {
         String freq = (String) frequencyCombo.getSelectedItem();
-        boolean enable = "Weekly".equals(freq) || "Custom".equals(freq);
+        boolean enable = "Weekly".equals(freq);
         for (JCheckBox cb : dayCheckboxes) {
             cb.setEnabled(enable);
         }
@@ -317,7 +321,7 @@ public class SetReminderDialog extends JDialog {
                     long reminderId = generatedKeys.getLong(1);
 
                     String frequencyType = (String) frequencyCombo.getSelectedItem();
-                    if ("Weekly".equals(frequencyType) || "Custom".equals(frequencyType)) {
+                    if ("Weekly".equals(frequencyType)) {
                         // Insert one reminder_time per selected weekday
                         for (int i = 0; i < dayCheckboxes.length; i++) {
                             if (dayCheckboxes[i].isSelected()) {
@@ -351,6 +355,166 @@ public class SetReminderDialog extends JDialog {
             JOptionPane.showMessageDialog(this, "Error saving reminder: " + ex.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
+        }
+    }
+
+    /**
+     * A custom JTextField with a rounded border.
+     */
+    private static class RoundedTextField extends JTextField {
+        private int cornerRadius;
+
+        public RoundedTextField(int radius) {
+            super();
+            this.cornerRadius = radius;
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(getBackground());
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            super.paintComponent(g);
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(200, 200, 200));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, cornerRadius, cornerRadius);
+            g2.dispose();
+        }
+    }
+
+    /**
+     * A custom JPanel with a rounded background.
+     */
+    private static class RoundedPanel extends JPanel {
+        private int cornerRadius;
+        private Color backgroundColor;
+
+        public RoundedPanel(int radius, Color bgColor) {
+            super();
+            this.cornerRadius = radius;
+            this.backgroundColor = bgColor;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setColor(backgroundColor);
+            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            g2d.dispose();
+        }
+    }
+    
+    /**
+     * A custom JButton with a filled, rounded background and hover effect.
+     */
+    private static class FilledRoundedButton extends JButton {
+        private final Color baseColor;
+        private static final int CORNER_RADIUS = 15;
+
+        public FilledRoundedButton(String text, Color baseColor) {
+            super(text);
+            this.baseColor = baseColor;
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setForeground(Color.WHITE);
+            setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+            setFont(new Font("Arial", Font.BOLD, 12));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            // Add hover effect
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    setBackground(baseColor.brighter());
+                    repaint(); // repaint to show brighter color
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setBackground(baseColor);
+                    repaint(); // repaint to show base color
+                }
+            });
+        }
+        
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Set background color based on hover state
+            if (getModel().isRollover()) {
+                g2.setColor(baseColor.brighter());
+            } else {
+                g2.setColor(baseColor);
+            }
+
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            // No border painting
+        }
+    }
+
+    private void styleComboBox(JComboBox<String> combo) {
+        combo.setOpaque(false);
+        combo.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
+        combo.setUI(new BasicComboBoxUI());
+    }
+
+    private void styleSpinner(JSpinner spinner) {
+        spinner.setOpaque(false);
+        spinner.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
+        spinner.setUI(new BasicSpinnerUI() {
+            @Override
+            protected JComponent createEditor() {
+                JComponent editor = super.createEditor();
+                if (editor instanceof JSpinner.DefaultEditor) {
+                    JTextField textField = ((JSpinner.DefaultEditor) editor).getTextField();
+                    textField.setUI(new BasicTextFieldUI() {
+                        @Override
+                        protected void paintBackground(Graphics g) {
+                            // Do nothing to avoid painting a separate background
+                        }
+                    });
+                    textField.setOpaque(false);
+                }
+                return editor;
+            }
+        });
+    }
+
+    private void styleDateChooser(JDateChooser dateChooser) {
+        dateChooser.setOpaque(false);
+        dateChooser.getCalendarButton().setContentAreaFilled(false);
+        dateChooser.getCalendarButton().setBorderPainted(false);
+        dateChooser.getCalendarButton().setBorder(BorderFactory.createEmptyBorder());
+        dateChooser.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
+        
+        // This is a direct fix, styling the internal text field
+        Component[] components = dateChooser.getComponents();
+        for (Component comp : components) {
+            if (comp instanceof JTextField) {
+                ((JTextField) comp).setBorder(BorderFactory.createEmptyBorder());
+                ((JTextField) comp).setOpaque(false);
+                break;
+            }
         }
     }
 }

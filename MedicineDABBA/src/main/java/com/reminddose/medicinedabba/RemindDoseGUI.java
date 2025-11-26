@@ -98,7 +98,7 @@ public class RemindDoseGUI extends JFrame {
         howItWorksButton.addActionListener(e -> smoothScrollTo(howItWorksPanel));
         JButton reminderGuideButton = createNavLink("Reminder Guide");
         reminderGuideButton.addActionListener(e -> smoothScrollTo(reminderGuidePanel));
-        JButton signInButton = new RoundedButton("Signin/Login");
+        JButton signInButton = new RoundedButton("Login");
         stylePrimaryButton(signInButton);
         signInButton.setBackground(COLOR_NAV);
         signInButton.setForeground(Color.WHITE);
@@ -188,7 +188,7 @@ public class RemindDoseGUI extends JFrame {
 
             // 2. Create and show the AboutDialog.
             //    Since the dialog is modal, the code will pause here until it's closed.
-            login dialog = new login();
+            SignUpWindow dialog = new SignUpWindow();
             dialog.setVisible(true);
 
             // 3. Once the dialog is closed, remove the blur effect.

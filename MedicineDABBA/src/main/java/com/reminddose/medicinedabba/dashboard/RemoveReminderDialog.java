@@ -4,15 +4,14 @@
  */
 package com.reminddose.medicinedabba.dashboard;
 
-/**
- *
- * @author lenovo
- */
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.basic.BasicComboBoxUI;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -21,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.reminddose.medicinedabba.database.DBConnection;
-import com.reminddose.medicinedabba.database.Session;   // ✅ Import Session for current user
+import com.reminddose.medicinedabba.database.Session;
 
 public class RemoveReminderDialog extends JDialog {
     private JComboBox<String> reminderCombo;
@@ -38,19 +37,20 @@ public class RemoveReminderDialog extends JDialog {
     }
 
     private void initializeUI() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(new Color(243,243,191)); // ✅ Unified background
+        JPanel panel = new RoundedPanel(15, new Color(243,243,191));
+        panel.setLayout(new GridBagLayout());
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.weightx = 1.0;
 
         // Reminder Selection
         gbc.gridx = 0; gbc.gridy = 0;
         panel.add(new JLabel("Select Reminder *:"), gbc);
         gbc.gridx = 1;
         reminderCombo = new JComboBox<>();
-        reminderCombo.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
+        styleComboBox(reminderCombo);
         panel.add(reminderCombo, gbc);
 
         // Reason
@@ -61,7 +61,7 @@ public class RemoveReminderDialog extends JDialog {
         reasonArea.setLineWrap(true);
         reasonArea.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(Color.GRAY, 1, true),
-                BorderFactory.createEmptyBorder(5, 8, 5, 8)
+                new EmptyBorder(5, 8, 5, 8)
         ));
         panel.add(new JScrollPane(reasonArea), gbc);
 
@@ -69,22 +69,16 @@ public class RemoveReminderDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = 2;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
-        buttonPanel.setBackground(new Color(243,243,191));
+        JPanel buttonPanel = new RoundedPanel(15, new Color(243,243,191));
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
 
-        JButton removeButton = new JButton("Remove");
-        removeButton.setBackground(new Color(200, 80, 80)); // ❌ Red for delete
-        removeButton.setForeground(Color.WHITE);
-        removeButton.setFocusPainted(false);
-        removeButton.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        JButton removeButton = new FilledRoundedButton("Remove", new Color(200, 80, 80));
         removeButton.addActionListener(this::removeReminder);
+        removeButton.setPreferredSize(new Dimension(90, 30));
 
-        JButton cancelButton = new JButton("Cancel");
-        cancelButton.setBackground(new Color(81,189,101)); // ✅ Green for cancel
-        cancelButton.setForeground(Color.WHITE);
-        cancelButton.setFocusPainted(false);
-        cancelButton.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        JButton cancelButton = new FilledRoundedButton("Cancel", new Color(81,189,101));
         cancelButton.addActionListener(e -> dispose());
+        cancelButton.setPreferredSize(new Dimension(90, 30));
 
         buttonPanel.add(removeButton);
         buttonPanel.add(cancelButton);
@@ -101,7 +95,7 @@ public class RemoveReminderDialog extends JDialog {
                          "JOIN reminder_times rt ON r.id = rt.reminder_id " +
                          "WHERE r.user_id = ?";
             PreparedStatement stmt = conn.prepareStatement(query);
-            stmt.setLong(1, getCurrentUserId());   // ✅ Logged-in user's reminders only
+            stmt.setLong(1, getCurrentUserId());
             
             ResultSet rs = stmt.executeQuery();
             reminderIds.clear();
@@ -151,7 +145,7 @@ public class RemoveReminderDialog extends JDialog {
             PreparedStatement timesStmt = conn.prepareStatement(deleteTimesQuery);
             timesStmt.setInt(1, reminderId);
             timesStmt.setInt(2, reminderId);
-            timesStmt.setLong(3, getCurrentUserId());   // ✅ Ensure only user's reminder
+            timesStmt.setLong(3, getCurrentUserId());
             timesStmt.executeUpdate();
             
             // Then delete the reminder itself
@@ -174,6 +168,93 @@ public class RemoveReminderDialog extends JDialog {
     }
     
     private long getCurrentUserId() {
-        return Session.getCurrentUserId();   // ✅ Use Session instead of hardcoded id
+        return Session.getCurrentUserId();
+    }
+    
+    /**
+     * A custom JPanel with a rounded background.
+     */
+    private static class RoundedPanel extends JPanel {
+        private int cornerRadius;
+        private Color backgroundColor;
+
+        public RoundedPanel(int radius, Color bgColor) {
+            super();
+            this.cornerRadius = radius;
+            this.backgroundColor = bgColor;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setColor(backgroundColor);
+            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+            g2d.dispose();
+        }
+    }
+    
+    /**
+     * A custom JButton with a filled, rounded background and hover effect.
+     */
+    private static class FilledRoundedButton extends JButton {
+        private final Color baseColor;
+        private static final int CORNER_RADIUS = 15;
+
+        public FilledRoundedButton(String text, Color baseColor) {
+            super(text);
+            this.baseColor = baseColor;
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setForeground(Color.WHITE);
+            setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+            setFont(new Font("Arial", Font.BOLD, 12));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            // Add hover effect
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    setBackground(baseColor.brighter());
+                    repaint(); // repaint to show brighter color
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setBackground(baseColor);
+                    repaint(); // repaint to show base color
+                }
+            });
+        }
+        
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Set background color based on hover state
+            if (getModel().isRollover()) {
+                g2.setColor(baseColor.brighter());
+            } else {
+                g2.setColor(baseColor);
+            }
+
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            // No border painting
+        }
+    }
+
+    private void styleComboBox(JComboBox<String> combo) {
+        combo.setOpaque(false);
+        combo.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
+        combo.setUI(new BasicComboBoxUI());
     }
 }

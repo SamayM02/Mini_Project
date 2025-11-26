@@ -12,6 +12,9 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -22,6 +25,12 @@ import java.util.List;
 import com.reminddose.medicinedabba.database.DBConnection;
 import com.reminddose.medicinedabba.database.Session;
 import com.reminddose.medicinedabba.dashboard.*;
+import java.awt.event.ActionEvent;
+import java.time.temporal.ChronoUnit;
+import java.awt.image.BufferedImage;
+import java.awt.image.ConvolveOp;
+import java.awt.image.Kernel;
+import javax.swing.plaf.basic.BasicPopupMenuUI;
 
 /**
  * The main dashboard window for the RemindDose application.
@@ -37,11 +46,14 @@ public class DashboardWindow extends JFrame {
     private final Color COLOR_TEXT_SECONDARY = new Color(108, 117, 125); // Gray text
     private final Color COLOR_BLUE_TEXT = new Color(94, 169, 244);
     private final Color COLOR_ORANGE_TEXT = new Color(253, 126, 20);
+    private final Color COLOR_NAV = new Color(81, 189, 101); // Darker Green for Buttons
 
     private JTextField searchInput;
     private JPanel mainPanel;
     private JPanel dashboardTilesPanel;
     private JPanel categoryTilesPanel;
+    private JScrollPane scrollPane; // Added JScrollPane member for scrolling logic
+    private Timer scrollTimer; // Added Timer for smooth scrolling
 
     private ReminderScheduler reminderScheduler;
 
@@ -70,7 +82,7 @@ public class DashboardWindow extends JFrame {
 
         // --- MAIN SCROLLABLE CONTENT ---
         mainPanel = createMainContentPanel();
-        JScrollPane scrollPane = new JScrollPane(mainPanel);
+        scrollPane = new JScrollPane(mainPanel); // Assigned to instance variable
         scrollPane.setBorder(null);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -116,41 +128,150 @@ public class DashboardWindow extends JFrame {
         newMedicineBtn.addActionListener(e -> openAddMedicineModal());
         navPanel.add(newMedicineBtn);
 
+        // Dashboard button now scrolls to top
         JButton dashboardBtn = createNavLink("Dashboard");
-        dashboardBtn.addActionListener(e -> refreshDashboard());
+        dashboardBtn.addActionListener(e -> smoothScrollTo(mainPanel)); // Scroll to the top of mainPanel (where search is)
         navPanel.add(dashboardBtn);
 
         JButton setReminderBtn = createNavLink("Set Reminder");
         setReminderBtn.addActionListener(e -> openReminderModal());
         navPanel.add(setReminderBtn);
-
-//        JButton importBtn = createNavLink("Import");
-//        navPanel.add(importBtn);
-//        
-//        JButton saveDataBtn = createNavLink("Save Data");
-//        navPanel.add(saveDataBtn);
+        
+        // Re-added Profile link (outside menu)
         JButton profileBtn = createNavLink("Profile");
         profileBtn.addActionListener(e -> openProfileModal());
         navPanel.add(profileBtn);
 
-        // Add the new Report link
+        // Re-added Report link (outside menu)
         JButton reportBtn = createNavLink("Report");
         reportBtn.addActionListener(e -> openReportWindow());
         navPanel.add(reportBtn);
 
-        JButton signoutButton = new JButton("Signout/Logout");
-        signoutButton.setBackground(new Color(111, 189, 82));
-        signoutButton.addActionListener(e -> {
-            Session.logout();
-            this.dispose();
-            new login().setVisible(true);
-        });
-        stylePrimaryButton(signoutButton);
-        signoutButton.setForeground(new Color(255, 255, 255));
-        navPanel.add(signoutButton);
+        // --- User Menu Button ---
+        JButton userMenuButton = createUserMenuButton();
+        navPanel.add(userMenuButton);
+        
         headerPanel.add(navPanel, BorderLayout.CENTER);
 
         return headerPanel;
+    }
+    
+    /**
+     * Creates the button that shows the user menu (Profile, Report, Logout).
+     */
+    private JButton createUserMenuButton() {
+        // Try to load an icon, otherwise use a default user text/unicode
+        ImageIcon userIcon = null;
+        try {
+            URL iconURL = getClass().getResource("profile.png");
+            if (iconURL != null) {
+                userIcon = new ImageIcon(new ImageIcon(iconURL).getImage().getScaledInstance(24, 24, Image.SCALE_SMOOTH));
+            } else {
+                // Fallback: use the main icon if user_icon.png is not found
+                URL fallbackURL = getClass().getResource("ico.png");
+                if (fallbackURL != null) {
+                    userIcon = new ImageIcon(new ImageIcon(fallbackURL).getImage().getScaledInstance(24, 24, Image.SCALE_SMOOTH));
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading user icon: " + e.getMessage());
+        }
+
+        JButton userButton = new JButton(""); // Initialize button with empty string text
+        userButton.setIcon(userIcon);
+        
+        // Use username as tooltip
+        userButton.setToolTipText(Session.getUsername() + " Menu");
+        userButton.setPreferredSize(new Dimension(40, 40));
+        userButton.setOpaque(false);
+        userButton.setContentAreaFilled(false);
+        userButton.setBorderPainted(false);
+        userButton.setFocusPainted(false);
+        userButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        // Note: Hover effect is intentionally disabled as requested to prevent visual artifacts.
+
+        userButton.addActionListener(e -> {
+            JPopupMenu userMenu = createPopupMenu();
+            userMenu.show(userButton, 0, userButton.getHeight());
+        });
+
+        return userButton;
+    }
+
+    /**
+     * Helper method to create and style JMenuItems for the popup menu.
+     */
+    private JMenuItem createStyledMenuItem(String text, ActionListener action) {
+        // Menu item styling constants defined here for clarity, using existing class colors
+        Font itemFont = new Font("Arial", Font.PLAIN, 14);
+        Color hoverColor = new Color(222, 244, 180);
+        
+        JMenuItem item = new JMenuItem(text);
+        item.setFont(itemFont);
+        item.setBackground(Color.WHITE);
+        // Smaller border for items to sit nicely inside the rounded menu area
+        item.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); 
+        item.setHorizontalAlignment(SwingConstants.LEFT);
+        item.addActionListener(action);
+        
+        // Custom hover effect
+        item.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                item.setBackground(hoverColor);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                // Reset to parent background (white)
+                item.setBackground(Color.WHITE);
+            }
+        });
+        return item;
+    }
+
+    /**
+     * Creates the JPopupMenu with Logout, Profile, and Report links.
+     */
+    private JPopupMenu createPopupMenu() {
+        // Use a JPopupMenu with slight padding
+        JPopupMenu menu = new JPopupMenu();
+        menu.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        
+        // Use custom UI to enable rounding and styling on the menu itself
+        menu.setUI(new RoundedPopupMenuUI());
+
+
+        // 1. Profile Link (inside menu)
+        menu.add(createStyledMenuItem("Profile", e -> openProfileModal()));
+
+        // 2. Report Link (inside menu)
+        menu.add(createStyledMenuItem("Report", e -> openReportWindow()));
+
+        menu.addSeparator();
+
+        // 3. Logout (with Confirmation)
+        JMenuItem logoutItem = createStyledMenuItem("Logout", e -> {
+            // Replaced JOptionPane with BlurOptionPane
+            int confirm = BlurOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to log out?",
+                "Confirm Logout",
+                BlurOptionPane.YES_NO_OPTION,
+                BlurOptionPane.QUESTION_MESSAGE
+            );
+
+            if (confirm == BlurOptionPane.YES_OPTION) {
+                Session.logout();
+                this.dispose();
+                new login().setVisible(true);
+            }
+        });
+        logoutItem.setForeground(COLOR_BUTTON_RED); // Make logout text red
+        menu.add(logoutItem);
+        
+        return menu;
     }
 
     /**
@@ -190,13 +311,8 @@ public class DashboardWindow extends JFrame {
         });
         searchInput.addActionListener(e -> searchMedicines());
 
-        JButton searchButton = new JButton("Search");
-        searchButton.setFont(new Font("Arial", Font.BOLD, 12));
-        searchButton.setBackground(COLOR_BUTTON_GREEN);
-        searchButton.setForeground(Color.WHITE);
-        searchButton.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
-        searchButton.setFocusPainted(false);
-        searchButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        JButton searchButton = new FilledRoundedButton("Search", COLOR_BUTTON_GREEN);
+        searchButton.setPreferredSize(new Dimension(80, 40));
         searchButton.addActionListener(e -> searchMedicines());
 
         searchPanel.add(searchInput);
@@ -221,6 +337,42 @@ public class DashboardWindow extends JFrame {
 
         return mainPanel;
     }
+
+    // New smooth scrolling implementation
+    private void smoothScrollTo(JPanel panel) {
+        if (scrollTimer != null && scrollTimer.isRunning()) {
+            scrollTimer.stop();
+        }
+        JScrollBar verticalScrollBar = scrollPane.getVerticalScrollBar();
+        int startValue = verticalScrollBar.getValue();
+        int endValue = panel.getY(); // Scroll to the top of the main content area (where search is)
+        int distance = endValue - startValue;
+        if (distance == 0) {
+            return;
+        }
+        int duration = 400; // milliseconds
+        int steps = 40;
+        int delay = duration / steps;
+        long startTime = System.currentTimeMillis();
+        scrollTimer = new Timer(delay, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                long now = System.currentTimeMillis();
+                long elapsedTime = now - startTime;
+                if (elapsedTime >= duration) {
+                    verticalScrollBar.setValue(endValue);
+                    ((Timer) e.getSource()).stop();
+                    return;
+                }
+                float t = (float) elapsedTime / duration;
+                t = (float) (1 - Math.pow(1 - t, 3)); // Easing function (easeOutCubic)
+                int currentValue = startValue + (int) (distance * t);
+                verticalScrollBar.setValue(currentValue);
+            }
+        });
+        scrollTimer.start();
+    }
+
 
     /**
      * Creates the top row of dashboard info tiles.
@@ -276,24 +428,87 @@ public class DashboardWindow extends JFrame {
     private JPanel createActionButtons() {
         JPanel panel = new JPanel(new GridLayout(2, 2, 15, 15));
         panel.setOpaque(false);
+        panel.setBorder(new EmptyBorder(10, 0, 0, 0));
 
-        JButton addMedicineBtn = createActionButton("Add New Medicine", "Track a new medication", "Add Medicine", COLOR_BUTTON_GREEN);
-        addMedicineBtn.addActionListener(e -> openAddMedicineModal());
-        panel.add(addMedicineBtn);
+        panel.add(createActionCard(
+                "Add New Medicine",
+                "Track a new medication",
+                "Add Medicine",
+                new Color(81, 189, 101),
+                e -> openAddMedicineModal()
+        ));
 
-        JButton setReminderBtn = createActionButton("Set Reminder", "Create a new reminder schedule", "Set Reminder", COLOR_BUTTON_GREEN);
-        setReminderBtn.addActionListener(e -> openReminderModal());
-        panel.add(setReminderBtn);
+        panel.add(createActionCard(
+                "Set Reminder",
+                "Create a new reminder schedule",
+                "Set Reminder",
+                new Color(81, 189, 101),
+                e -> openReminderModal()
+        ));
 
-        JButton removeMedicineBtn = createActionButton("Remove Medicine", "Delete an existing medication", "Remove Medicine", COLOR_BUTTON_RED);
-        removeMedicineBtn.addActionListener(e -> openRemoveMedicineModal());
-        panel.add(removeMedicineBtn);
+        panel.add(createActionCard(
+                "Remove Medicine",
+                "Delete an existing medication",
+                "Remove Medicine",
+                new Color(220, 53, 69),
+                e -> openRemoveMedicineModal()
+        ));
 
-        JButton removeReminderBtn = createActionButton("Remove Reminder", "Delete an existing reminder", "Remove Reminder", COLOR_BUTTON_RED);
-        removeReminderBtn.addActionListener(e -> openRemoveReminderModal());
-        panel.add(removeReminderBtn);
+        panel.add(createActionCard(
+                "Remove Reminder",
+                "Delete an existing reminder",
+                "Remove Reminder",
+                new Color(220, 53, 69),
+                e -> openRemoveReminderModal()
+        ));
 
         return panel;
+    }
+    
+    /**
+     * Creates a single action card with title, subtitle and a button.
+     */
+    private JPanel createActionCard(String title, String subtitle, String buttonText, Color buttonColor, ActionListener actionListener) {
+        JPanel cardPanel = new RoundedPanel(15, COLOR_PANEL_BG);
+        cardPanel.setLayout(new BorderLayout(10, 10)); // Use BorderLayout for clear sections
+        cardPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        // Text Panel for Title and Subtitle
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.setOpaque(false);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        titleLabel.setForeground(COLOR_TEXT_PRIMARY);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel subtitleLabel = new JLabel(subtitle);
+        subtitleLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+        subtitleLabel.setForeground(COLOR_TEXT_SECONDARY);
+        subtitleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        textPanel.add(titleLabel);
+        textPanel.add(subtitleLabel);
+        
+        // Button Panel (aligned to the right)
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.setOpaque(false);
+        
+        JButton actionButton = new FilledRoundedButton(buttonText, buttonColor);
+        actionButton.addActionListener(actionListener);
+        actionButton.setPreferredSize(new Dimension(100, 30));
+        buttonPanel.add(actionButton);
+        
+        // Combine text and button in a single panel
+        JPanel contentPanel = new JPanel(new BorderLayout());
+        contentPanel.setOpaque(false);
+        contentPanel.add(textPanel, BorderLayout.WEST); // Text to the left
+        contentPanel.add(buttonPanel, BorderLayout.EAST); // Button to the right
+
+        cardPanel.add(contentPanel, BorderLayout.CENTER);
+
+        return cardPanel;
     }
 
     // --- HELPER METHODS FOR CREATING COMPONENTS ---
@@ -491,17 +706,6 @@ public class DashboardWindow extends JFrame {
         return panel;
     }
 
-    private JButton createActionButton(String title, String subtitle, String buttonText, Color buttonColor) {
-        RoundedButton button = new RoundedButton(buttonText, 10);
-        button.setBackground(buttonColor);
-        button.setForeground(Color.WHITE);
-        button.setFont(new Font("Arial", Font.BOLD, 12));
-        button.setFocusPainted(false);
-        button.setBorder(new EmptyBorder(8, 15, 8, 15));
-
-        return button;
-    }
-
     private JButton createNavLink(String text) {
         JButton button = new JButton(text);
         button.setFont(new Font("Arial", Font.PLAIN, 14));
@@ -642,8 +846,9 @@ public class DashboardWindow extends JFrame {
             }
 
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error loading dashboard data: " + ex.getMessage(),
-                    "Database Error", JOptionPane.ERROR_MESSAGE);
+            // Replaced JOptionPane with BlurOptionPane
+            BlurOptionPane.showMessageDialog(this, "Error loading dashboard data: " + ex.getMessage(),
+                    "Database Error", BlurOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
         }
     }
@@ -845,8 +1050,7 @@ public class DashboardWindow extends JFrame {
             resultsArea.setText(results.toString());
             panel.add(new JScrollPane(resultsArea), BorderLayout.CENTER);
 
-            JButton closeButton = new JButton("Close");
-            closeButton.setBackground(COLOR_BUTTON_RED);
+            JButton closeButton = new FilledRoundedButton("Close", COLOR_BUTTON_RED);
             closeButton.addActionListener(e -> resultsDialog.dispose());
             JPanel buttonPanel = new JPanel();
             buttonPanel.add(closeButton);
@@ -860,8 +1064,9 @@ public class DashboardWindow extends JFrame {
             bgp.setVisible(false);
 
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error searching medicines: " + ex.getMessage(),
-                    "Database Error", JOptionPane.ERROR_MESSAGE);
+            // Replaced JOptionPane with BlurOptionPane
+            BlurOptionPane.showMessageDialog(this, "Error searching medicines: " + ex.getMessage(),
+                    "Database Error", BlurOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -1097,6 +1302,237 @@ public class DashboardWindow extends JFrame {
         @Override
         protected void paintBorder(Graphics g) {
             // No border painting for rounded button
+        }
+    }
+    
+    /**
+     * A custom JButton with a filled, rounded background and hover effect.
+     */
+    private static class FilledRoundedButton extends JButton {
+        private final Color baseColor;
+        private static final int CORNER_RADIUS = 15;
+
+        public FilledRoundedButton(String text, Color baseColor) {
+            super(text);
+            this.baseColor = baseColor;
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setForeground(Color.WHITE);
+            setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+            setFont(new Font("Arial", Font.BOLD, 12));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            // Add hover effect
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    setBackground(baseColor.brighter());
+                    repaint(); // repaint to show brighter color
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setBackground(baseColor);
+                    repaint(); // repaint to show base color
+                }
+            });
+        }
+        
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Set background color based on hover state
+            if (getModel().isRollover()) {
+                g2.setColor(baseColor.brighter());
+            } else {
+                g2.setColor(baseColor);
+            }
+
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), CORNER_RADIUS, CORNER_RADIUS);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            // No border painting
+        }
+    }
+    
+    /**
+     * Custom UI for JPopupMenu to render with rounded corners.
+     */
+    private static class RoundedPopupMenuUI extends javax.swing.plaf.basic.BasicPopupMenuUI {
+        @Override
+        public void paint(Graphics g, JComponent c) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Draw rounded white background
+            g2.setColor(Color.WHITE);
+            g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 15, 15);
+            
+            // Draw a light grey rounded border
+            g2.setColor(new Color(200, 200, 200));
+            g2.drawRoundRect(0, 0, c.getWidth() - 1, c.getHeight() - 1, 15, 15);
+            
+            g2.dispose();
+            
+            // Let the superclass paint the components (JMenuItems) on top
+            super.paint(g, c);
+        }
+        
+        // This is necessary to allow the custom painting to show through, but BasicPopupMenuUI 
+        // doesn't expose an easy way to override the background filling, so we rely on 
+        // setOpaque(false) on the menu itself and override paint() if possible, 
+        // or ensure the background is drawn first.
+        // For JPopupMenu, overriding paint() works best.
+    }
+    
+    // --- NEW CLASS: BlurGlassPane ---
+    // Copied from com.reminddose.medicinedabba.BlurGlassPane.java (for local access)
+    private static class BlurGlassPane extends JComponent {
+
+        private BufferedImage blurredImage;
+        private final JFrame parentFrame;
+
+        public BlurGlassPane(JFrame frame) {
+            this.parentFrame = frame;
+        }
+
+        @Override
+        public void setVisible(boolean aFlag) {
+            if (aFlag) {
+                updateBlurredImage();
+            }
+            super.setVisible(aFlag);
+        }
+
+        private void updateBlurredImage() {
+            try {
+                Robot robot = new Robot();
+                Rectangle rect = parentFrame.getBounds();
+                // Ensure screen capture only includes the parent frame area
+                BufferedImage screenCapture = robot.createScreenCapture(rect); 
+                float[] blurKernel = new float[49];
+                for (int i = 0; i < blurKernel.length; i++) {
+                    blurKernel[i] = 1.0f / 49.0f;
+                }
+                Kernel kernel = new Kernel(7, 7, blurKernel);
+                ConvolveOp op = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null);
+                blurredImage = op.filter(screenCapture, null);
+            } catch (AWTException e) {
+                e.printStackTrace();
+                blurredImage = null;
+            }
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (blurredImage != null) {
+                g.drawImage(blurredImage, 0, 0, this);
+            }
+            // Add a slight dark overlay for better contrast
+            g.setColor(new Color(0, 0, 0, 80)); 
+            g.fillRect(0, 0, getWidth(), getHeight());
+        }
+    }
+    
+    // --- NEW CLASS: BlurOptionPane ---
+    /**
+     * Custom wrapper for JOptionPane that applies a BlurGlassPane to the parent
+     * Frame before showing the dialog and removes it afterwards.
+     */
+    private static class BlurOptionPane {
+        
+        public static final int DEFAULT_OPTION = JOptionPane.DEFAULT_OPTION;
+        public static final int YES_NO_OPTION = JOptionPane.YES_NO_OPTION;
+        public static final int YES_NO_CANCEL_OPTION = JOptionPane.YES_NO_CANCEL_OPTION;
+        public static final int OK_CANCEL_OPTION = JOptionPane.OK_CANCEL_OPTION;
+        
+        public static final int PLAIN_MESSAGE = JOptionPane.PLAIN_MESSAGE;
+        public static final int ERROR_MESSAGE = JOptionPane.ERROR_MESSAGE;
+        public static final int INFORMATION_MESSAGE = JOptionPane.INFORMATION_MESSAGE;
+        public static final int WARNING_MESSAGE = JOptionPane.WARNING_MESSAGE;
+        public static final int QUESTION_MESSAGE = JOptionPane.QUESTION_MESSAGE;
+        
+        public static final int YES_OPTION = JOptionPane.YES_OPTION;
+        public static final int NO_OPTION = JOptionPane.NO_OPTION;
+        public static final int CANCEL_OPTION = JOptionPane.CANCEL_OPTION;
+        public static final int OK_OPTION = JOptionPane.OK_OPTION;
+        public static final int CLOSED_OPTION = JOptionPane.CLOSED_OPTION;
+        
+        private static void setupBlur(JFrame parentFrame) {
+            BlurGlassPane bgp = new BlurGlassPane(parentFrame);
+            parentFrame.setGlassPane(bgp);
+            bgp.setVisible(true);
+        }
+        
+        private static void removeBlur(JFrame parentFrame) {
+            Component glassPane = parentFrame.getGlassPane();
+            if (glassPane instanceof BlurGlassPane) {
+                glassPane.setVisible(false);
+                // Optionally reset glass pane to null or a default if desired, but setting visible(false) is often enough
+            }
+        }
+        
+        /**
+         * Shows an information message dialog with blur effect.
+         */
+        public static void showMessageDialog(Component parentComponent, Object message, String title, int messageType) {
+            JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(parentComponent);
+            if (parentFrame == null) {
+                JOptionPane.showMessageDialog(parentComponent, message, title, messageType);
+                return;
+            }
+            
+            setupBlur(parentFrame);
+            try {
+                JOptionPane.showMessageDialog(parentFrame, message, title, messageType);
+            } finally {
+                removeBlur(parentFrame);
+            }
+        }
+        
+        /**
+         * Shows a confirmation dialog with blur effect.
+         */
+        public static int showConfirmDialog(Component parentComponent, Object message, String title, int optionType, int messageType) {
+            JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(parentComponent);
+            if (parentFrame == null) {
+                return JOptionPane.showConfirmDialog(parentComponent, message, title, optionType, messageType);
+            }
+            
+            setupBlur(parentFrame);
+            int result = CLOSED_OPTION;
+            try {
+                result = JOptionPane.showConfirmDialog(parentFrame, message, title, optionType, messageType);
+            } finally {
+                removeBlur(parentFrame);
+            }
+            return result;
+        }
+        
+        /**
+         * Shows an input dialog with blur effect.
+         */
+        public static String showInputDialog(Component parentComponent, Object message, String title, int messageType) {
+            JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(parentComponent);
+            if (parentFrame == null) {
+                return JOptionPane.showInputDialog(parentComponent, message, title, messageType);
+            }
+            
+            setupBlur(parentFrame);
+            String result = null;
+            try {
+                result = JOptionPane.showInputDialog(parentFrame, message, title, messageType);
+            } finally {
+                removeBlur(parentFrame);
+            }
+            return result;
         }
     }
 }
